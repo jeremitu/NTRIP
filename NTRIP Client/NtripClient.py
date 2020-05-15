@@ -22,20 +22,21 @@ maxReconnect=1
 maxReconnectTime=1200
 sleepTime=1 # So the first one is 1 second
 maxConnectTime=0
+gga_period = 5
 
 
 class NtripClient(object):
     def __init__(self,
-                 buffer=50,
+                 buffer=1024,
                  user="",
                  out=sys.stdout,
                  port=2101,
                  caster="",
                  mountpoint="",
                  host=False,
-                 lat=46,
-                 lon=122,
-                 height=1212,
+                 lat=50.491,
+                 lon=8.16,
+                 height=286,
                  ssl=False,
                  verbose=False,
                  UDP_Port=None,
@@ -124,6 +125,7 @@ class NtripClient(object):
         reconnectTry=1
         sleepTime=1
         reconnectTime=0
+        gga_time = datetime.datetime.now()
         if maxConnectTime > 0 :
             EndConnect=datetime.timedelta(seconds=maxConnectTime)
         try:
@@ -189,14 +191,19 @@ class NtripClient(object):
                         try:
                             data=self.socket.recv(self.buffer)
                             self.out.write(data)
+                            #print(len(data))
                             if self.UDP_socket:
                                 self.UDP_socket.sendto(data, ('<broadcast>', self.UDP_Port))
-#                            print datetime.datetime.now()-connectTime
                             if maxConnectTime :
                                 if datetime.datetime.now() > connectTime+EndConnect:
                                     if self.verbose:
                                         sys.stderr.write("Connection Timed exceeded\n")
                                     sys.exit(0)
+                            if gga_period > 0:
+                                now = datetime.datetime.now()
+                                if now > gga_time + datetime.timedelta(seconds = gga_period):
+                                  self.socket.sendall(self.getGGAString())
+                                  gga_time = now
 
 
                         except socket.timeout:
