@@ -23,6 +23,9 @@ maxReconnectTime=1200
 sleepTime=1 # So the first one is 1 second
 maxConnectTime=0
 gga_period = 5
+encoding = 'Latin-1'
+#encoding = 'ascii'
+#encoding = 'utf-8'
 
 
 class NtripClient(object):
@@ -45,7 +48,7 @@ class NtripClient(object):
                  headerOutput=False,
                  ):
         self.buffer=buffer
-        self.user=base64.b64encode(user)
+        self.user=base64.b64encode(user.encode(encoding=encoding)).decode(encoding=encoding)  #encode required for Python3
         self.out=out
         self.port=port
         self.caster=caster
@@ -103,8 +106,8 @@ class NtripClient(object):
            mountPointString+="Ntrip-Version: Ntrip/2.0\r\n"
         mountPointString+="\r\n"
         if self.verbose:
-           print mountPointString
-        return mountPointString
+           print(mountPointString)
+        return mountPointString.encode(encoding=encoding)
 
     def getGGAString(self):
         now = datetime.datetime.utcnow()
@@ -112,8 +115,8 @@ class NtripClient(object):
             (now.hour,now.minute,now.second,self.latDeg,self.latMin,self.flagN,self.lonDeg,self.lonMin,self.flagE,self.height)
         checksum = self.calcultateCheckSum(ggaString)
         if self.verbose:
-            print  "$%s*%s\r\n" % (ggaString, checksum)
-        return "$%s*%s\r\n" % (ggaString, checksum)
+            print("$%s*%s\r\n" % (ggaString, checksum))
+        return ("$%s*%s\r\n" % (ggaString, checksum)).encode(encoding=encoding)
 
     def calcultateCheckSum(self, stringToCheck):
         xsum_calc = 0
@@ -126,7 +129,7 @@ class NtripClient(object):
         sleepTime=1
         reconnectTime=0
         gga_time = datetime.datetime.now()
-        if maxConnectTime > 0 :
+        if maxConnectTime:
             EndConnect=datetime.timedelta(seconds=maxConnectTime)
         try:
             while reconnectTry<=maxReconnect:
@@ -143,10 +146,10 @@ class NtripClient(object):
                     sleepTime = 1
                     connectTime=datetime.datetime.now()
 
-                    self.socket.settimeout(10)
+                    self.socket.settimeout(1000) # ms
                     self.socket.sendall(self.getMountPointString())
                     while not found_header:
-                        casterResponse=self.socket.recv(4096) #All the data
+                        casterResponse=self.socket.recv(4096).decode(encoding=encoding) #All the data
                         header_lines = casterResponse.split("\r\n")
 
                         for line in header_lines:
@@ -190,7 +193,8 @@ class NtripClient(object):
                     while data:
                         try:
                             data=self.socket.recv(self.buffer)
-                            self.out.write(data)
+                            #print(data)
+                            self.out.write(data) #.encode(encoding=encoding) # takes str
                             #print(len(data))
                             if self.UDP_socket:
                                 self.UDP_socket.sendto(data, ('<broadcast>', self.UDP_Port))
@@ -232,7 +236,7 @@ class NtripClient(object):
                 else:
                     self.socket=None
                     if self.verbose:
-                        print "Error indicator: ", error_indicator
+                        print("Error indicator: ", error_indicator)
 
                     if reconnectTry < maxReconnect :
                         sys.stderr.write( "%s No Connection to NtripCaster.  Trying again in %i seconds\n" % (datetime.datetime.now(), sleepTime))
@@ -254,9 +258,9 @@ if __name__ == '__main__':
     parser.add_option("-p", "--password", type="string", dest="password", default="IBS", help="The Ntripcaster password. Default: %default")
     parser.add_option("-o", "--org", type="string", dest="org", help="Use IBSS and the provided organization for the user. Caster and Port are not needed in this case Default: %default")
     parser.add_option("-b", "--baseorg", type="string", dest="baseorg", help="The org that the base is in. IBSS Only, assumed to be the user org")
-    parser.add_option("-t", "--latitude", type="float", dest="lat", default=50.09, help="Your latitude.  Default: %default")
-    parser.add_option("-g", "--longitude", type="float", dest="lon", default=8.66, help="Your longitude.  Default: %default")
-    parser.add_option("-e", "--height", type="float", dest="height", default=1200, help="Your ellipsoid height.  Default: %default")
+    parser.add_option("-t", "--latitude", type="float", dest="lat", default=50.491, help="Your latitude.  Default: %default")
+    parser.add_option("-g", "--longitude", type="float", dest="lon", default=8.16, help="Your longitude.  Default: %default")
+    parser.add_option("-e", "--height", type="float", dest="height", default=286, help="Your ellipsoid height.  Default: %default")
     parser.add_option("-v", "--verbose", action="store_true", dest="verbose", default=False, help="Verbose")
     parser.add_option("-s", "--ssl", action="store_true", dest="ssl", default=False, help="Use SSL for the connection")
     parser.add_option("-H", "--host", action="store_true", dest="host", default=False, help="Include host header, should be on for IBSS")
@@ -265,6 +269,7 @@ if __name__ == '__main__':
     parser.add_option("-2", "--V2", action="store_true", dest="V2", default=False, help="Make a NTRIP V2 Connection")
     parser.add_option("-f", "--outputFile", type="string", dest="outputFile", default=None, help="Write to this file, instead of stdout")
     parser.add_option("-m", "--maxtime", type="int", dest="maxConnectTime", default=None, help="Maximum length of the connection, in seconds")
+    parser.add_option("-B", "--baudrate", type="int", dest="baudrate", default=None, help="Baudrate / write to serial port")
 
     parser.add_option("--Header", action="store_true", dest="headerOutput", default=False, help="Write headers to stderr")
     parser.add_option("--HeaderFile", type="string", dest="headerFile", default=None, help="Write headers to this file, instead of stderr.")
@@ -283,7 +288,7 @@ if __name__ == '__main__':
 
     if options.org:
         if len(args) != 1 :
-            print "Incorrect number of arguments for IBSS\n"
+            print("Incorrect number of arguments for IBSS\n")
             parser.print_help()
             sys.exit(1)
         ntripArgs['user']=options.user+"."+options.org + ":" + options.password
@@ -299,7 +304,7 @@ if __name__ == '__main__':
 
     else:
         if len(args) != 3 :
-            print "Incorrect number of arguments for NTRIP\n"
+            print("Incorrect number of arguments for NTRIP\n")
             parser.print_help()
             sys.exit(1)
         ntripArgs['user']=options.user+":"+options.password
@@ -322,27 +327,32 @@ if __name__ == '__main__':
     maxConnectTime=options.maxConnectTime
 
     if options.verbose:
-        print "Server: " + ntripArgs['caster']
-        print "Port: " + str(ntripArgs['port'])
-        print "User: " + ntripArgs['user']
-        print "mountpoint: " +ntripArgs['mountpoint']
-        print "Reconnects: " + str(maxReconnect)
-        print "Max Connect Time: " + str (maxConnectTime)
+        print("Server: " + ntripArgs['caster'])
+        print("Port: " + str(ntripArgs['port']))
+        print("User: " + ntripArgs['user'])
+        print("mountpoint: " +ntripArgs['mountpoint'])
+        print("Reconnects: " + str(maxReconnect))
+        print("Max Connect Time: " + str (maxConnectTime))
         if ntripArgs['V2']:
-            print "NTRIP: V2"
+            print("NTRIP: V2")
         else:
-            print "NTRIP: V1 "
+            print("NTRIP: V1 ")
         if ntripArgs["ssl"]:
-            print "SSL Connection"
+            print("SSL Connection")
         else:
-            print "Uncrypted Connection"
-        print ""
+            print("Unencrypted Connection")
+        print("")
 
 
 
     fileOutput=False
     if options.outputFile:
-        f = open(options.outputFile, 'w')
+        if options.baudrate:
+          import serial
+          f = serial.Serial(options.outputFile, baudrate=options.baudrate)
+          #print(f)
+        else:
+          f = open(options.outputFile, 'wb') # 'wb' to write bytes
         ntripArgs['out']=f
         fileOutput=True
 
